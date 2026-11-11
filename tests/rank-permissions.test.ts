@@ -1,4 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
+import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { addMember, asUser, createTestDb, rankId, rankNameOf, type TestMember } from "./helpers/db";
 
@@ -45,6 +48,50 @@ describe("seed data", () => {
       "select (select count(*)::int from divisions) as divisions, (select count(*)::int from units) as units",
     );
     expect(counts.rows[0]).toEqual({ divisions: 12, units: 10 });
+  });
+
+  it("seeds the three Chairs and four Admins confirmed by the owner", async () => {
+    const leaders = await db.query<{ discord_name: string; rank: string | null; home: string | null; posts: string }>(
+      `select m.discord_name, r.name as rank, i.slug as home,
+              string_agg(a.title, ', ' order by a.title) as posts
+         from members m
+         left join ranks r on r.id = m.rank_id
+         left join member_assignments ma on ma.member_id = m.id and ma.is_primary
+         left join initiatives i on i.id = ma.initiative_id
+         join appointments a on a.member_id = m.id
+        where m.discord_id in ('358101352938995715', '143127736414633984', '242246773555462145', '201532643483975681')
+        group by m.discord_name, r.name, i.slug
+        order by m.discord_name`,
+    );
+    expect(leaders.rows).toEqual([
+      { discord_name: "Chance", rank: "Chair", home: "eos", posts: "=The High Table=, Chair of Eos" },
+      { discord_name: "Hary", rank: "Chair", home: "helios", posts: "=The High Table=, Chair of Helios" },
+      { discord_name: "Tusk", rank: "Chair", home: "selene", posts: "=The High Table=, Chair of Selene" },
+      { discord_name: "Wolffe", rank: null, home: null, posts: "Org Chairman" },
+    ]);
+  });
+
+  it("can be run twice without creating duplicates", async () => {
+    const before = await db.query<{ n: number }>(
+      "select (select count(*) from members) + (select count(*) from appointments) + (select count(*) from member_assignments) + (select count(*) from divisions) as n",
+    );
+    await db.exec(readFileSync(join(process.cwd(), "supabase", "seed.sql"), "utf8"));
+    const after = await db.query<{ n: number }>(
+      "select (select count(*) from members) + (select count(*) from appointments) + (select count(*) from member_assignments) + (select count(*) from divisions) as n",
+    );
+    expect(after.rows[0]!.n).toEqual(before.rows[0]!.n);
+  });
+
+  it("makes Wolffe an Admin once linked to a Discord login", async () => {
+    const authUserId = randomUUID();
+    await db.query("insert into auth.users (id) values ($1)", [authUserId]);
+    await db.query("update members set auth_user_id = $1 where discord_id = '201532643483975681'", [authUserId]);
+
+    const specialist = await rankId(db, "Specialist");
+    await asUser(db, authUserId, (tx) =>
+      tx.query("select change_rank($1, $2, $3)", [member.id, specialist, "Approved by the Org Chairman"]),
+    );
+    expect(await rankNameOf(db, member.id)).toBe("Specialist");
   });
 });
 

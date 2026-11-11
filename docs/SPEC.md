@@ -44,7 +44,9 @@ The owner has decided three things. The current Discord structure post (Structur
 | Salvage | Part of the Eos Industry Division; no separate Salvage role or division |
 | Awards | Out of scope for now; don't seed or sync award roles until the owner raises it |
 | Promotion approval | Division leaders approve promotions up to and including Prefect (Hoplite to Operator, Specialist, Prefect). A Division Director approves inside their own division; a Chair approves anywhere in their own initiative, never in another. Promotions to Praetor and above, and all demotions, still need an Admin. Demotions were not discussed, so they stay Admin-only until the owner decides |
-| Chairs (leaders) | Hary: Chair of Helios. Chance: Chair of Eos. Tusk: Chair of Selene. Safe to seed; the owner will supply their Discord user IDs. Other recorded leaders (Hall, Wolffe, fleet leads) are not confirmed and are not seeded |
+| Chairs (leaders) | Hary: Chair of Helios (Discord 358101352938995715). Chance: Chair of Eos (Discord 143127736414633984). Tusk: Chair of Selene (Discord 242246773555462145). Seeded with Chair rank, their home initiative and a Chair appointment. Hall and the fleet leads are not confirmed and are not seeded |
+| Org Chairman | Wolffe (Discord 201532643483975681). Admin through an org-wide "Org Chairman" appointment. Has no rank and no home initiative: the one exception to "every member has exactly one home initiative" |
+| Admins at launch | Wolffe, Chance, Hary and Tusk. The three Chairs are Admins through an org-wide "=The High Table=" appointment |
 | RSI org | Public org page: robertsspaceindustries.com/en/orgs/OLDHUNTERS (org name Hyperion Defense Industries; the OLDHUNTERS tag is an old name RSI won't let us change). The member list is public (213 members on 11 Nov 2026). Members who hide their org membership on RSI won't appear, so admins need a manual verify option |
 
 ## Org model Cortana will store
@@ -297,6 +299,6 @@ The domain switch happens between Phase 4 and Phase 5.
 - ~~Are the recorded leaders current and safe to seed?~~ Answered: Hary, Chance and Tusk as Chairs; others not confirmed
 - ~~Is HDI's RSI org page member list public?~~ Answered: yes. Still open: does HDI add people there only after a trial period? (Phase 2)
 - Who may demote a member, and to which ranks? (Admin-only until decided)
-- Discord user IDs for Hary, Chance and Tusk (owner to supply; needed for the seed)
+- ~~Discord user IDs for Hary, Chance and Tusk~~ Supplied 11 Nov 2026 and seeded, with Wolffe as Org Chairman
 - Where should merch live after Squarespace? (Phase 4)
 - Approved logo files, colour values and fonts for the website theme. (Phase 4)

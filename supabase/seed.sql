@@ -2,11 +2,11 @@
 --   "Org model Cortana will store" and "Live Discord server versus the confirmed structure".
 --
 -- Safe to run more than once (existing rows are left alone).
--- Deliberately NOT seeded until the open questions are answered:
---   * members and leaders (are the recorded leaders current and safe to seed?)
---   * awards (which award roles are official?)
+-- Deliberately NOT seeded:
+--   * members other than the confirmed leaders at the bottom of this file
+--   * awards (deferred by the owner)
 --   * Discord role IDs (Phase 2's /setup roles matches them by discord_role_name)
---   * a separate Salvage sub-division (Salvage is part of Eos Industry for now)
+--   * a separate Salvage division (owner: Salvage is part of Eos Industry)
 
 -- ---------------------------------------------------------------------------
 -- Rank ladder, lowest to highest
@@ -105,3 +105,51 @@ from (values
 join public.initiatives i on i.slug = u.initiative_slug
 join public.divisions dv on dv.initiative_id = i.id and dv.slug = u.division_slug
 on conflict (division_id, name) do nothing;
+
+-- ---------------------------------------------------------------------------
+-- Confirmed leaders (owner answers, 11 November 2026; docs/SPEC.md).
+-- discord_name is a starting label; the bot refreshes it from Discord.
+-- They are 'active' but not RSI-verified until they run /verify.
+-- ---------------------------------------------------------------------------
+insert into public.members (discord_id, discord_name, status, rank_id)
+select l.discord_id, l.discord_name, 'active', r.id
+from (values
+  ('358101352938995715', 'Hary',   'Chair'),
+  ('143127736414633984', 'Chance', 'Chair'),
+  ('242246773555462145', 'Tusk',   'Chair'),
+  -- Org Chairman: Admin, with no rank and no home initiative (owner decision).
+  ('201532643483975681', 'Wolffe', null)
+) as l(discord_id, discord_name, rank_name)
+left join public.ranks r on r.name = l.rank_name
+on conflict (discord_id) do nothing;
+
+-- Home initiatives for the three Chairs.
+insert into public.member_assignments (member_id, initiative_id, is_primary)
+select m.id, i.id, true
+from (values
+  ('358101352938995715', 'helios'),
+  ('143127736414633984', 'eos'),
+  ('242246773555462145', 'selene')
+) as a(discord_id, initiative_slug)
+join public.members m on m.discord_id = a.discord_id
+join public.initiatives i on i.slug = a.initiative_slug
+on conflict (member_id) where is_primary do nothing;
+
+-- Appointments: each Chair over their own initiative, and all four as Admins
+-- (an org-wide appointment is what makes someone an Admin).
+insert into public.appointments (member_id, title, scope, scope_id)
+select m.id, x.title, x.scope::public.appointment_scope, i.id
+from (values
+  ('358101352938995715', 'Chair of Helios',  'initiative', 'helios'),
+  ('143127736414633984', 'Chair of Eos',     'initiative', 'eos'),
+  ('242246773555462145', 'Chair of Selene',  'initiative', 'selene'),
+  ('201532643483975681', 'Org Chairman',     'org',        null),
+  ('358101352938995715', '=The High Table=', 'org',        null),
+  ('143127736414633984', '=The High Table=', 'org',        null),
+  ('242246773555462145', '=The High Table=', 'org',        null)
+) as x(discord_id, title, scope, initiative_slug)
+join public.members m on m.discord_id = x.discord_id
+left join public.initiatives i on i.slug = x.initiative_slug
+where not exists (
+  select 1 from public.appointments a where a.member_id = m.id and a.title = x.title
+);
