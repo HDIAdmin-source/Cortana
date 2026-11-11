@@ -6,13 +6,17 @@ What's built so far:
 
 - **Phase 1, foundation:** the project layout, the database tables, the permission rules, the starting org data and the leaders.
 - **Phase 2, bot onboarding and roles:** the Discord bot's `/setup`, `/enlist`, `/verify`, `/profile`, `/roster`, `/assign` and `/promote` commands; Discord roles that follow Cortana automatically; and a config for running the bot on Railway.
+- **Phase 3, operations:**
+  - `/op create` posts an operation with sign-up buttons.
+  - `/op attend` takes attendance, `/op aar` writes the after-action report, and `/op cancel` cancels.
+  - `/hangar` lists a member's ships, using the Star Citizen Wiki's ship list.
 
 ## What's in here
 
 | Folder | What it is |
 | --- | --- |
 | `apps/web` | The website (Next.js). For now it is one page that lists the initiatives from the database. |
-| `apps/bot` | The Discord bot (discord.js). `src/commands` holds one file per slash command, `src/sync` keeps Discord roles in line with Cortana, and `src/rsi.ts` reads RSI's public pages for `/verify`. |
+| `apps/bot` | The Discord bot (discord.js). `src/commands` holds one file per slash command, `src/sync` keeps Discord roles in line with Cortana, `src/ops` draws the op posts, `src/rsi.ts` reads RSI's public pages for `/verify`, and `src/wiki.ts` loads ships from the Star Citizen Wiki. |
 | `packages/shared` | Code both apps use, such as the shapes of database rows. |
 | `supabase/migrations` | The database setup, run in order: tables, permissions, rank-change and audit rules, then the Phase 2 bot rules. |
 | `supabase/seed.sql` | The starting data: 4 initiatives, 12 divisions, 10 units (8 Fleet squadrons, N.O.V.A. and H.E.R.D.), the 8-rank ladder, the confirmed leaders (the three Chairs and Wolffe as Org Chairman), and the org settings (RSI tag `OLDHUNTERS`, active-member role `HDI`). |
@@ -72,6 +76,14 @@ The tests start a temporary database in memory, apply every migration and the se
 - **An applicant** goes through `/enlist`, `/verify` and acceptance by `/assign`.
 - **Role syncing** must give a member exactly their initiative, division, rank and HDI roles, and must never touch any other role.
 - **The RSI reader** must say "couldn't check" when RSI is down or changes its pages, never "failed".
+- **Operations:**
+  - Only Officers create ops and take attendance, and ordinary members and Prefects are refused.
+  - Verified members sign up, change their mind, and pick a ship from their own hangar only.
+  - Attendance includes walk-ins, and members can't undo it themselves.
+  - The after-action report closes the op.
+  - Op posts stay within Discord's size limits even with 300 sign-ups.
+- **Hangars** are private: Officers only see ships a member has offered for ops.
+- **UTC times:** start times are read strictly as UTC, so "20/11 7pm" is refused instead of guessed.
 
 A green "passed" line means the database itself enforces the rules, so going around the website or bot doesn't get around them.
 
@@ -79,6 +91,12 @@ To check the RSI reader against the real RSI site (needs the internet), give it 
 
 ```bash
 pnpm --filter @cortana/bot rsi-smoke SomeHandle
+```
+
+To check the ship reader against the real Star Citizen Wiki API:
+
+```bash
+pnpm --filter @cortana/bot wiki-smoke
 ```
 
 ## Run it locally
@@ -187,6 +205,23 @@ Use a second Discord account that isn't in Cortana yet as the "recruit".
 
 Every change above is written to `audit_log` with who made it. You can view it in Supabase Studio.
 
+## Try operations and hangars (Phase 3 "done" check)
+
+The spec's check: an officer can post an op, members sign up with buttons, and attendance is recorded. You need one Officer, meaning a Praetor or above, or an Admin. You also need at least one verified active member; use `/promote` to make a test account a Praetor.
+
+1. **Ship list:** the bot loads it from the Star Citizen Wiki the first time it starts. To refresh it later, an Admin runs `/setup ships`.
+2. **Member:** `/hangar add`. Start typing a ship name and pick it from the list. Choose `available: True` to offer it for ops. Check with `/hangar list`. Hangars are private: other members can't see them, and Officers only see ships offered for ops.
+3. **Officer**, in the channel where the op should be posted: `/op create`, with a name and a `start` in **UTC** written as `2026-11-20 19:00`. Optionally add an objective, lead initiative, staging point and voice channel.
+   - The bot posts the op with **Going / Maybe / Can't make it / My ship & role** buttons.
+   - Everyone sees the time in their own time zone.
+   - The bot also tells the officer what the time works out to locally, so a wrong UTC conversion is easy to spot.
+4. **Members:** click **Going** or **Maybe**, then pick a ship from their hangar and set a role (Pilot, Medic…). The post updates with who's coming.
+5. **Officer**, after the op: `/op attend`, choosing the op and then the people who turned up (up to 25 at a time, including people who didn't sign up). Use `remove: True` to fix a mistake. The post shows who attended.
+6. **Officer:** `/op aar` opens a form for the after-action report. It's saved, and the op is marked completed and its buttons disappear. `public: True` lets the future website show the report; the default keeps it members-only.
+7. `/op cancel` cancels an op that won't happen.
+
+Ship data comes from the [Star Citizen Wiki API](https://api.star-citizen.wiki) and is credited wherever the bot shows it. Hangar numbers are member-reported and not checked against RSI.
+
 ## Run the bot on Railway (always on)
 
 The website runs on Vercel, but a bot has to stay connected all the time, so it runs on Railway. Do this only after the test server checks pass.
@@ -247,13 +282,18 @@ These are written down so you can confirm or change them. Once decided, add the 
 - **Director roles:** the bot manages one "Division Director" role for the Director rank. The live "Sub Division Director" and "EOS Initiative Sub-Director" roles are still handed out by hand.
 - **Awards are not synced** to Discord yet; the owner deferred awards.
 - **Existing members aren't imported yet.** Cortana only manages roles for people it knows about: the seeded leaders, and anyone who enlists. Everyone else's roles are left completely alone. Importing the current ~185 members is a separate step to plan before going live. Until then, a leader's hand-given division roles will show up as mismatches once roles are linked.
+- **Ops are posted in the channel where `/op create` is run**, and **any Officer can run any op**: take attendance, write the report or cancel it, not just its commander. Each officer is named in `audit_log`.
+- **Attendance is taken 25 people at a time**, a Discord limit on pickers; run `/op attend` again for bigger ops. Marking attendance moves a planned op to "under way".
+- **Signing up needs a verified active member**; applicants can't sign up yet.
+- **Ships are never deleted** from the catalogue when the Wiki drops one, because members' hangars point at them. Duplicate "display" models from the Wiki are skipped.
 - **Tables added beyond the spec's fifteen:** `org_settings` (RSI tag and HDI role), `promotion_requests` (proposals waiting for an Admin) and `verification_codes` (one-time `/verify` codes).
 - **Extra columns** added for the bot and later phases:
   - `discord_role_name`, `rank_role_prefix` and `discord_role_name_pattern`, for matching Discord roles
   - `slug` and `sort_order`
   - `unit_id` on assignments
   - `kind` on units
-  - `is_public` on operations
+  - `is_public` on operations, plus `discord_channel_id`, `discord_message_id` and `created_by` so the bot can update an op's post
+  - `wiki_slug`, `size`, `career` and `kind` (spaceship or ground) on ships
   - `interested_initiative_id` on members
   - `leader_can_approve` on ranks
   - `actor_role` on the audit log

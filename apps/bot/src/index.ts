@@ -1,5 +1,6 @@
 import { Client, Events, GatewayIntentBits, MessageFlags, type Interaction } from "discord.js";
-import { commandsByName } from "./commands";
+import { commandsByName, componentHandlers } from "./commands";
+import { syncShips } from "./wiki";
 import type { Ctx } from "./context";
 import { createDb, UserFacingError } from "./db";
 import { loadEnv } from "./env";
@@ -33,6 +34,14 @@ client.once(Events.ClientReady, async (ready) => {
   if (!ready.guilds.cache.has(env.guildId)) {
     console.warn(`The bot isn't in the server ${env.guildId} (DISCORD_GUILD_ID). Invite it first; see the README.`);
   }
+
+  // First run: fill the ship list from the Star Citizen Wiki so /hangar add has ships to offer.
+  const { count, error } = await db.from("ships").select("id", { count: "exact", head: true });
+  if (!error && count === 0) {
+    syncShips(db)
+      .then((n) => console.log(`Loaded ${n} ships from the Star Citizen Wiki.`))
+      .catch((err) => console.error("Couldn't load ships from the Star Citizen Wiki (try /setup ships later):", err));
+  }
 });
 
 async function reply(interaction: Interaction, content: string) {
@@ -62,17 +71,30 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
-  if (!interaction.isChatInputCommand()) return;
-  const command = commandsByName.get(interaction.commandName);
-  if (!command) return;
+  let label: string;
+  let run: () => Promise<void>;
+  if (interaction.isChatInputCommand()) {
+    const command = commandsByName.get(interaction.commandName);
+    if (!command) return;
+    label = `/${interaction.commandName}`;
+    run = () => command.execute(ctx, interaction);
+  } else if (interaction.isMessageComponent() || interaction.isModalSubmit()) {
+    const prefix = interaction.customId.split(":")[0]!;
+    const handler = componentHandlers.get(prefix);
+    if (!handler) return;
+    label = `component ${prefix}`;
+    run = () => handler(ctx, interaction);
+  } else {
+    return;
+  }
 
   try {
-    await command.execute(ctx, interaction);
+    await run();
   } catch (err) {
     if (err instanceof UserFacingError) {
       await reply(interaction, err.message);
     } else {
-      console.error(`/${interaction.commandName} failed:`, err);
+      console.error(`${label} failed:`, err);
       await reply(interaction, "Something went wrong on my side, and an admin can see the details in the bot's logs. Nothing was changed unless I said so.");
     }
   }

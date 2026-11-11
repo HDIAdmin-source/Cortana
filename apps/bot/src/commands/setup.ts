@@ -3,6 +3,7 @@ import { rpc, UserFacingError } from "../db";
 import { choices } from "../lookups";
 import { describeSync, syncMember } from "../sync/apply";
 import type { RoleLink, RoleTarget, WhoAmI } from "../types";
+import { syncShips, WIKI_CREDIT } from "../wiki";
 import type { Command } from "./types";
 
 async function requireAdmin(ctx: Parameters<Command["execute"]>[0], discordId: string) {
@@ -45,7 +46,8 @@ export const setup: Command = {
         .setName("sync")
         .setDescription("Make a member's Discord roles match Cortana now")
         .addUserOption((o) => o.setName("member").setDescription("Who").setRequired(true)),
-    ),
+    )
+    .addSubcommand((s) => s.setName("ships").setDescription("Refresh the ship list from the Star Citizen Wiki")),
 
   async autocomplete(ctx, interaction) {
     const targets = await rpc<RoleTarget[]>(ctx.db, "bot_role_targets");
@@ -111,6 +113,17 @@ export const setup: Command = {
       ctx.lookups.invalidate();
       if (!saved) throw new UserFacingError("I couldn't find that Cortana entry. Pick one from the list.");
       await interaction.editReply([`Linked to **${role.name}**.`, ...roleWarnings(role)].join("\n"));
+      return;
+    }
+
+    if (sub === "ships") {
+      try {
+        const count = await syncShips(ctx.db);
+        await interaction.editReply(`Ship list refreshed: **${count}** ships and vehicles. ${WIKI_CREDIT}.`);
+      } catch (err) {
+        console.error("Ship sync failed:", err);
+        throw new UserFacingError("I couldn't read the Star Citizen Wiki right now. The ship list hasn't changed; try again later.");
+      }
       return;
     }
 

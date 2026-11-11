@@ -147,6 +147,8 @@ Fleet numbers on the website come from `member_ships` and are labelled "member-r
 
 **Added in Phase 2 (12 November 2026).** Three supporting tables: `org_settings` (RSI org tag and the active-member Discord role), `promotion_requests` (promotions a Director or Chair proposed, waiting for an Admin) and `verification_codes` (one-time `/verify` codes). The bot connects with the service-role key, so it changes data only through `bot_*` database functions. These apply the permission rules to whoever ran the command and record them in `audit_log`.
 
+**Added in Phase 3 (13 November 2026).** `operations` also stores where its Discord sign-up post is (`discord_channel_id`, `discord_message_id`) and who created it. `ships` also stores the Wiki slug, size, career and kind (spaceship or ground). Ops are posted in the channel where `/op create` runs; any Officer can take attendance, write the after-action report or cancel any op. Attendance accepts walk-ins who didn't sign up. Members can't mark or undo their own attendance. `/op cancel` was added alongside create, attend and aar.
+
 ## Identity, verification and permissions
 
 A member's Discord account is their HDI login everywhere: the website, the phone app and the overlay all use "Log in with Discord", and the bot already knows them. One person, one `members` row.

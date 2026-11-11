@@ -9,6 +9,7 @@
     "start": "tsx src/index.ts",
     "register:prod": "tsx src/register.ts",
     "rsi-smoke": "tsx scripts/rsi-smoke.ts",
+    "wiki-smoke": "tsx scripts/wiki-smoke.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
