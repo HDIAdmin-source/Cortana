@@ -36,6 +36,19 @@ The owner has decided three things. The current Discord structure post (Structur
 | Admin access | The owner plus Administration (=The High Table=) |
 | Website | Out of date; initiative copy is rebuilt from this structure |
 
+**Owner answers to the Phase 2 open questions, 11 November 2026.**
+
+| Topic | Decision |
+| --- | --- |
+| Auxiliary Discord roles | No Auxiliary initiative role and no new Media Division role. Giving a member the Auxiliary division role is enough |
+| Salvage | Part of the Eos Industry Division; no separate Salvage role or division |
+| Awards | Out of scope for now; don't seed or sync award roles until the owner raises it |
+| Promotion approval | Division leaders approve promotions up to and including Prefect (Hoplite to Operator, Specialist, Prefect). A Division Director approves inside their own division; a Chair approves anywhere in their own initiative, never in another. Promotions to Praetor and above, and all demotions, still need an Admin. Demotions were not discussed, so they stay Admin-only until the owner decides |
+| Chairs (leaders) | Hary: Chair of Helios (Discord 358101352938995715). Chance: Chair of Eos (Discord 143127736414633984). Tusk: Chair of Selene (Discord 242246773555462145). Seeded with Chair rank, their home initiative and a Chair appointment. Hall and the fleet leads are not confirmed and are not seeded |
+| Org Chairman | Wolffe (Discord 201532643483975681). Admin through an org-wide "Org Chairman" appointment. Has no rank and no home initiative: the one exception to "every member has exactly one home initiative" |
+| Admins at launch | Wolffe, Chance, Hary and Tusk. The three Chairs are Admins through an org-wide "=The High Table=" appointment |
+| RSI org | Public org page: robertsspaceindustries.com/en/orgs/OLDHUNTERS (org name Hyperion Defense Industries; the OLDHUNTERS tag is an old name RSI won't let us change). The member list is public (213 members on 11 Nov 2026). Members who hide their org membership on RSI won't appear, so admins need a manual verify option |
+
 ## Org model Cortana will store
 
 Cortana stores the structure below as data in the database, loaded from a seed file. No initiative, division or rank name is written into the code. When leadership renames a division or adds one, an admin edits the data and every app updates.
@@ -150,7 +163,7 @@ This method depends on RSI's page layout. When RSI changes its site, verificatio
 | --- | --- | --- |
 | Member | Any verified active member | See the roster, sign up for ops, edit own profile and hangar |
 | Officer | Praetor and Centurion (Prefect for their own team, to confirm) | Create ops, take attendance, write after-action reports |
-| Director | Director rank, scoped to the division or initiative in their appointment | Assign members and propose promotions inside that scope only; no access to other initiatives |
+| Director | Director rank, scoped to the division or initiative in their appointment (Chairs: their whole initiative) | Assign members, approve promotions up to Prefect, and propose higher promotions, inside that scope only; no access to other initiatives |
 | Admin | Owner and Administration (=The High Table=) | Approve rank changes, appointments and awards; edit org structure |
 
 The database enforces these levels (Supabase row-level security), not just the buttons on screen. Someone who calls the API directly gets the same limits.
@@ -169,7 +182,7 @@ The first version of the bot does four jobs: onboarding, role sync, ops sign-ups
 | `/op create` | Officers | Creates an operation with time in UTC, posts an embed with sign-up buttons |
 | `/op attend` / `/op aar` | Officers | Takes attendance and records the after-action summary |
 | `/assign` | Directors, admins | Sets a member's initiative, division or unit |
-| `/promote` | Directors propose, admins approve | Two-step rank change with a reason, logged to `rank_history` |
+| `/promote` | Directors and Chairs approve up to Prefect in their scope; above that they propose and admins approve | Rank change with a reason, logged to `rank_history`; two-step (propose, then Admin approves) for Praetor and above |
 | `/award` | Admins | Grants an award with a citation |
 | `/setup roles` | Admins | Matches database entries to live Discord roles by name, stores their IDs, asks an admin to confirm any it can't match |
 
@@ -279,11 +292,13 @@ The domain switch happens between Phase 4 and Phase 5.
 
 ## Open questions (answer before the phase shown)
 
-- Should Discord get an Auxiliary initiative role and an Auxiliary - Media Division role? (Phase 2)
-- Is Salvage its own role or part of Eos - Industry Division? (Phase 2)
-- Which award roles are official awards? (Phase 2)
-- Who may approve promotions at each rank level? (Phase 2)
-- Are the recorded leaders (Hary, Hall, Tusk, Wolffe and the fleet leads) current and safe to seed? (Phase 2)
-- Is HDI's RSI org page member list public, and does HDI add people there only after a trial period? (Phase 2)
+- ~~Should Discord get an Auxiliary initiative role and an Auxiliary - Media Division role?~~ Answered 11 Nov 2026: no (see Owner answers)
+- ~~Is Salvage its own role or part of Eos - Industry Division?~~ Answered: part of Industry
+- ~~Which award roles are official awards?~~ Deferred by the owner; awards are out of scope for now
+- ~~Who may approve promotions at each rank level?~~ Answered: division leaders up to Prefect, Admins above
+- ~~Are the recorded leaders current and safe to seed?~~ Answered: Hary, Chance and Tusk as Chairs; others not confirmed
+- ~~Is HDI's RSI org page member list public?~~ Answered: yes. Still open: does HDI add people there only after a trial period? (Phase 2)
+- Who may demote a member, and to which ranks? (Admin-only until decided)
+- ~~Discord user IDs for Hary, Chance and Tusk~~ Supplied 11 Nov 2026 and seeded, with Wolffe as Org Chairman
 - Where should merch live after Squarespace? (Phase 4)
 - Approved logo files, colour values and fonts for the website theme. (Phase 4)

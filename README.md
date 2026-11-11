@@ -18,7 +18,7 @@ This is **Phase 1: foundation**. It includes:
 | `apps/bot` | The Discord bot (discord.js). For now it logs in and checks it can reach the database. |
 | `packages/shared` | Code both apps use, such as the shapes of database rows. |
 | `supabase/migrations` | The database setup, run in order: tables, then permissions, then rank-change and audit rules. |
-| `supabase/seed.sql` | The starting data: 4 initiatives, 12 divisions, 10 units (8 Fleet squadrons, N.O.V.A. and H.E.R.D.) and the 8-rank ladder. |
+| `supabase/seed.sql` | The starting data: 4 initiatives, 12 divisions, 10 units (8 Fleet squadrons, N.O.V.A. and H.E.R.D.), the 8-rank ladder, and the confirmed leaders (the three Chairs and Wolffe as Org Chairman). |
 | `tests` | Automated checks of the permission rules. |
 | `docs/SPEC.md` | The spec. If the code and the spec disagree, the spec wins. |
 
@@ -156,7 +156,9 @@ These are written down so you can confirm or change them. Once decided, add the 
 
 - **Prefect is treated as Member level for now.** The spec says Prefect might be an Officer "for their own team, to confirm".
 - **Admin = anyone with a current `org`-scope appointment.** There is no separate admin list. To make someone an Admin, add that appointment. To remove them, set its end date.
-- **Not seeded yet:** members and leaders, awards, Discord role IDs, and a separate Salvage division. All of these are open questions in the spec. Each seeded item does store its live Discord role *name*, so Phase 2's `/setup roles` can find the matching role IDs.
+- **Seeded leaders:** Hary (Chair of Helios), Chance (Chair of Eos) and Tusk (Chair of Selene), plus Wolffe as Org Chairman. All four are Admins. They aren't RSI-verified until they run `/verify`. Their Admin powers only work once each one logs in with Discord and Cortana links that login to their record; the bot and website do this from Phase 2 onwards.
+- **Not seeded:** other members, awards, Discord role IDs, and a separate Salvage division (the owner decided Salvage is part of Industry). Each seeded item does store its live Discord role *name*, so Phase 2's `/setup roles` can find the matching role IDs.
+- **Promotions up to Prefect by division leaders** (the owner's answer, now in the spec) arrive with Phase 2's `/promote`. Until then, only Admins can change ranks.
 - **A few extra columns** not listed in the spec were added because later phases need them:
   - `discord_role_name` and `rank_role_prefix`, for matching Discord roles
   - `slug` and `sort_order`
