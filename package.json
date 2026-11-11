@@ -2,8 +2,9 @@
   "name": "cortana",
   "private": true,
   "description": "HDI Cortana: one backend for the website, Discord bot, phone app and overlay. See docs/SPEC.md.",
+  "packageManager": "pnpm@12.18.0",
   "engines": {
-    "node": ">=20.6"
+    "node": ">=22"
   },
   "scripts": {
     "test": "vitest run",

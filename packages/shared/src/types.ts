@@ -31,8 +31,33 @@ export interface Member {
   rank_id: Uuid | null;
   joined_at: Timestamp | null;
   timezone: string | null;
+  /** The initiative they asked for in /enlist; their real home is set by /assign. */
+  interested_initiative_id: Uuid | null;
   created_at: Timestamp;
   updated_at: Timestamp;
+}
+
+/** The single row of organisation-wide settings. */
+export interface OrgSettings {
+  rsi_org_sid: string;
+  member_role_name: string | null;
+  member_role_id: string | null;
+}
+
+export type PromotionStatus = "pending" | "approved" | "rejected";
+
+/** A promotion a Director or Chair proposed that needs an Admin. */
+export interface PromotionRequest {
+  id: Uuid;
+  member_id: Uuid;
+  from_rank: Uuid | null;
+  to_rank: Uuid;
+  reason: string;
+  proposed_by: Uuid | null;
+  status: PromotionStatus;
+  decided_by: Uuid | null;
+  decided_at: Timestamp | null;
+  created_at: Timestamp;
 }
 
 export interface Initiative {
@@ -70,6 +95,10 @@ export interface Rank {
   description: string | null;
   /** Discord role ID per home initiative, keyed by initiative slug. */
   discord_role_ids: Record<string, string>;
+  /** Division leaders may approve promotions to this rank (owner decision: up to Prefect). */
+  leader_can_approve: boolean;
+  /** Live Discord role name, e.g. "{prefix}{rank}" -> "H-Operator", "Chair of {initiative}". */
+  discord_role_name_pattern: string | null;
 }
 
 export interface MemberAssignment {

@@ -2,24 +2,21 @@
 
 Cortana is the single backend for Hyperion Defense Industries. It holds one database plus a set of rules, and the website, the Discord bot, the phone app and (later) the game overlay all read from it and write to it. The full plan is in [docs/SPEC.md](docs/SPEC.md).
 
-This is **Phase 1: foundation**. It includes:
+What's built so far:
 
-- the project layout (one repository holding the website, the bot and shared code)
-- the database tables
-- the permission rules that decide who can change what
-- the starting org data (initiatives, divisions, units and ranks)
-- tests proving that an ordinary Member cannot change ranks and an Admin can
+- **Phase 1, foundation:** the project layout, the database tables, the permission rules, the starting org data and the leaders.
+- **Phase 2, bot onboarding and roles:** the Discord bot's `/setup`, `/enlist`, `/verify`, `/profile`, `/roster`, `/assign` and `/promote` commands; Discord roles that follow Cortana automatically; and a config for running the bot on Railway.
 
 ## What's in here
 
 | Folder | What it is |
 | --- | --- |
 | `apps/web` | The website (Next.js). For now it is one page that lists the initiatives from the database. |
-| `apps/bot` | The Discord bot (discord.js). For now it logs in and checks it can reach the database. |
+| `apps/bot` | The Discord bot (discord.js). `src/commands` holds one file per slash command, `src/sync` keeps Discord roles in line with Cortana, and `src/rsi.ts` reads RSI's public pages for `/verify`. |
 | `packages/shared` | Code both apps use, such as the shapes of database rows. |
-| `supabase/migrations` | The database setup, run in order: tables, then permissions, then rank-change and audit rules. |
-| `supabase/seed.sql` | The starting data: 4 initiatives, 12 divisions, 10 units (8 Fleet squadrons, N.O.V.A. and H.E.R.D.), the 8-rank ladder, and the confirmed leaders (the three Chairs and Wolffe as Org Chairman). |
-| `tests` | Automated checks of the permission rules. |
+| `supabase/migrations` | The database setup, run in order: tables, permissions, rank-change and audit rules, then the Phase 2 bot rules. |
+| `supabase/seed.sql` | The starting data: 4 initiatives, 12 divisions, 10 units (8 Fleet squadrons, N.O.V.A. and H.E.R.D.), the 8-rank ladder, the confirmed leaders (the three Chairs and Wolffe as Org Chairman), and the org settings (RSI tag `OLDHUNTERS`, active-member role `HDI`). |
+| `tests` | Automated checks of the permission rules, the bot's database rules, role syncing and the RSI reader. |
 | `docs/SPEC.md` | The spec. If the code and the spec disagree, the spec wins. |
 
 ## One-time setup on your PC
@@ -45,12 +42,12 @@ node --version
 pnpm --version
 ```
 
-**Keep the project in a short folder path**, such as `C:\Users\<you>\code\cortana`. Windows can't start programs whose full path is longer than 260 characters, and a deeply nested folder pushes some of the project's tools past that limit. When that happens, you get a "spawn … ENOENT" error even though the file exists.
+**Keep the project in a short folder path**, such as `F:\Cortana` or `C:\Users\<you>\code\cortana`. Windows can't start programs whose full path is longer than 260 characters, and a deeply nested folder pushes some of the project's tools past that limit. When that happens, you get a "spawn … ENOENT" error even though the file exists.
 
 Then move your terminal into the project folder. Every `pnpm` command in this README must be run from there, not from your home folder:
 
 ```bash
-cd C:\Users\<you>\code\cortana
+cd F:\Cortana
 ```
 
 Download everything the project depends on:
@@ -61,7 +58,7 @@ pnpm install
 
 pnpm only lets a package run its own setup scripts if the project approves it. That approval list is `allowBuilds` in `pnpm-workspace.yaml`, and `esbuild`, which the tests need, is already on it. If a future install says "Ignored build scripts", run `pnpm approve-builds` and approve only packages you recognise.
 
-## Run the tests (no database or Docker needed)
+## Run the tests (no database, Docker or Discord needed)
 
 ```bash
 pnpm test
@@ -69,13 +66,22 @@ pnpm test
 
 The tests start a temporary database in memory, apply every migration and the seed file, then act as different people:
 
-- **A Member** tries to promote themselves, change someone else's rank, use the rank-change function, rename the ranks and forge rank history. Every attempt must fail. The test also checks that the same Member can still edit their own timezone.
-- **An Admin** changes a rank. It must work, and it must leave a `rank_history` row (old rank, new rank, reason, who approved it) and an `audit_log` entry.
-- **An Admin whose appointment has ended** is treated as an ordinary member again.
+- **A Member** tries to promote themselves, change someone else's rank, rename the ranks and forge rank history. Every attempt must fail.
+- **An Admin** changes, demotes and approves ranks. It must work, and each change must be recorded in `rank_history` and `audit_log` with who did it.
+- **A Chair** and **a Division Director** assign and promote people. They must stay inside their own initiative or division, and must stop at Prefect, where their promotions become proposals.
+- **An applicant** goes through `/enlist`, `/verify` and acceptance by `/assign`.
+- **Role syncing** must give a member exactly their initiative, division, rank and HDI roles, and must never touch any other role.
+- **The RSI reader** must say "couldn't check" when RSI is down or changes its pages, never "failed".
 
 A green "passed" line means the database itself enforces the rules, so going around the website or bot doesn't get around them.
 
-## Run the whole thing locally (optional)
+To check the RSI reader against the real RSI site (needs the internet), give it any handle that's listed in the HDI org:
+
+```bash
+pnpm --filter @cortana/bot rsi-smoke SomeHandle
+```
+
+## Run it locally
 
 To see the website and bot working against a real local copy of Supabase, you also need **Docker Desktop** ([docker.com](https://www.docker.com/products/docker-desktop/)). Supabase runs its local database inside Docker. Start Docker Desktop first, then:
 
@@ -103,13 +109,7 @@ To see the website and bot working against a real local copy of Supabase, you al
 
    Open http://localhost:3000. You should see Helios, Eos, Selene and Auxiliary with their mottos.
 
-4. **Bot** (use your **test** Discord server, never the live one). Copy `apps/bot/.env.example` to `apps/bot/.env`. Fill in the bot token from the Discord Developer Portal, plus the API URL and service_role key from step 1. Then run:
-
-   ```bash
-   pnpm dev:bot
-   ```
-
-   It should print "logged in as …" and "Database OK. Initiatives: Helios, Eos, Selene, Auxiliary".
+4. **Bot:** follow the next section.
 
 5. When you're done, stop the local database:
 
@@ -118,6 +118,86 @@ To see the website and bot working against a real local copy of Supabase, you al
    ```
 
 **Keep secrets out of the repo.** `.env` and `.env.local` are already excluded from Git. The bot token and the service_role key go only in those files on your PC and in the hosting dashboards. Never put them in code or chat messages.
+
+## Set up the Discord bot in your TEST server
+
+Use the HDI **test** Discord server for all of this. Point the bot at the live server only once the owner has approved Phase 2.
+
+### 1. Discord Developer Portal (once)
+
+Open [discord.com/developers/applications](https://discord.com/developers/applications) and select your Cortana application.
+
+1. **Bot** page: turn on **Server Members Intent**, then save. The bot needs it to notice roles handed out by hand. Without it, the bot can't log in.
+2. **Bot** page: click **Reset Token** and copy the token. It goes in `.env` below; don't share it.
+3. **General Information** page: copy the **Application ID**.
+
+### 2. Invite the bot to the test server (once)
+
+Open this link, with `YOUR_APPLICATION_ID` replaced by the Application ID, and pick the test server:
+
+```
+https://discord.com/oauth2/authorize?client_id=YOUR_APPLICATION_ID&scope=bot+applications.commands&permissions=268438528
+```
+
+The bot only asks for **Manage Roles**, **Send Messages** and **View Channels**, plus slash commands, **never Administrator**.
+
+Then, in the test server's **Server Settings → Roles**, drag the bot's role **above** every rank, initiative, division, unit and HDI role. A bot can only hand out roles that sit below its own. Also check that none of those roles has the Administrator permission. `/setup roles` warns you if one does.
+
+### 3. Fill in `apps/bot/.env`
+
+Copy `apps/bot/.env.example` to `apps/bot/.env` and fill it in. In Discord, turn on **Settings → Advanced → Developer Mode**; you can then right-click a server, channel or role and choose **Copy ID**.
+
+- `DISCORD_TOKEN`, `DISCORD_CLIENT_ID`: from step 1.
+- `DISCORD_GUILD_ID`: the test server's ID.
+- `ADMIN_CHANNEL_ID` (optional): a staff-only channel. Role mismatches and promotion proposals are posted there.
+- `RECRUITMENT_CHANNEL_ID` and `RECRUITER_ROLE_ID` (optional): where new applications are posted, and who gets pinged.
+- `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`: from `pnpm db:start` for local testing.
+
+### 4. Register the commands, then start the bot
+
+```bash
+pnpm --filter @cortana/bot register
+```
+
+That tells Discord about the slash commands. Run it again whenever a command changes.
+
+```bash
+pnpm dev:bot
+```
+
+It should print "logged in as …" and "Database OK. Initiatives: Helios, Eos, Selene, Auxiliary". Leave it running.
+
+### 5. Connect Cortana to the server's roles
+
+The seeded Admins (Wolffe, Chance, Hary and Tusk) are recognised by their Discord IDs, so they can use Admin commands straight away. One of them runs:
+
+- `/setup roles`. The bot matches Cortana's entries to roles by name, such as `H-Operator`, `Eos - Industry Division`, `Chair of Helios` and `HDI`. It saves the matches and lists any it couldn't match.
+- `/setup link` for each one that didn't match. Pick the Cortana entry, then the Discord role.
+
+## Try the whole onboarding flow (Phase 2 "done" check)
+
+Use a second Discord account that isn't in Cortana yet as the "recruit".
+
+1. **Recruit:** `/enlist`, giving their RSI handle, time zone and initiative. They become an applicant, and recruiters are pinged if you set that up.
+2. **Recruit:** `/verify handle`, then paste the code (such as `HDI-7F3K`) into their RSI **Short Bio** and run `/verify check`. Cortana checks the bio has the code and that the handle is in HDI's public RSI member list. If their org membership is hidden on RSI, an Admin can use `/verify manual` instead.
+3. **A leader** (the Chair of that initiative, a Division Director for their division, or an Admin): `/assign`, choosing the recruit, initiative and division. This accepts them as an **active Hoplite**, and the bot gives them the HDI, initiative, division and `X-Hoplite` roles.
+4. **The leader:** `/promote member` up to Prefect takes effect immediately, and the bot swaps the rank role. Promoting to Praetor or above becomes a proposal, which an Admin approves with `/promote decide`.
+5. **Anyone verified:** `/profile` and `/roster`.
+6. **Try the safety net:** hand the recruit a rank role by hand in Discord. The bot posts a mismatch warning in the admin channel and changes nothing.
+
+Every change above is written to `audit_log` with who made it. You can view it in Supabase Studio.
+
+## Run the bot on Railway (always on)
+
+The website runs on Vercel, but a bot has to stay connected all the time, so it runs on Railway. Do this only after the test server checks pass.
+
+1. In Railway, create a project, then **New → GitHub Repo → HDIAdmin-source/Cortana**.
+2. In the service's **Settings**:
+   - **Root Directory:** leave it empty, because the bot needs the whole repo.
+   - **Config file path:** `apps/bot/railway.json`. That file sets the start command, and only redeploys when bot code changes.
+3. In **Variables**, add everything from `apps/bot/.env`, but with the **real Supabase project's** URL and service_role key (Supabase dashboard → Project Settings → API). Railway keeps them secret; they never go in the repo.
+4. Deploy. The logs should show "logged in as …" and "Database OK".
+5. Register the commands for that server once. On your PC, with `apps/bot/.env` pointing at the same server, run `pnpm --filter @cortana/bot register`.
 
 ## Putting the tables on the real Supabase project
 
@@ -145,25 +225,36 @@ The levels come from the "Permission levels" table in the spec. The database dec
 | --- | --- |
 | Member | Status is `active` **and** their RSI handle is verified |
 | Officer | Their rank's tier is `officer` or higher (Praetor and Centurion today) |
-| Director | Director or Chair rank **and** a current appointment to an initiative or division. They can only assign members inside that initiative or division. |
+| Director | Director or Chair rank **and** a current appointment to an initiative (Chairs) or a division (Division Directors). Inside that scope only, they can accept and assign members and promote up to Prefect; higher promotions become proposals. |
 | Admin | A current appointment with scope `org`. Give one to the owner and to each member of =The High Table=. |
 
-Rank changes go through `change_rank(member, new rank, reason)`, which only Admins may call. Even if someone edits the `members` table directly, a safety check blocks rank, status and verification changes unless the person is an Admin. Every rank change is written to `rank_history`. Every change to members, assignments, appointments, awards or ranks is written to `audit_log`.
+The website will connect as a logged-in user, so row-level security applies to it. The bot connects with the service-role key, which skips row-level security. So the bot never edits tables directly. Every action goes through a `bot_*` function in the database. That function takes the Discord ID of whoever ran the command, applies the same rules, and records that person in `audit_log`. Only the bot's key can call those functions.
 
-## Choices made in Phase 1 that need your decision
+Some rules are stored as data, so leaders can change them without code:
+
+- which ranks division leaders may approve: `ranks.leader_can_approve`
+- how rank roles are named in Discord: `ranks.discord_role_name_pattern`
+- the RSI org tag and the active-member role: the `org_settings` table
+
+## Choices made so far that need your decision
 
 These are written down so you can confirm or change them. Once decided, add the answer to the spec.
 
-- **Prefect is treated as Member level for now.** The spec says Prefect might be an Officer "for their own team, to confirm".
-- **Admin = anyone with a current `org`-scope appointment.** There is no separate admin list. To make someone an Admin, add that appointment. To remove them, set its end date.
-- **Seeded leaders:** Hary (Chair of Helios), Chance (Chair of Eos) and Tusk (Chair of Selene), plus Wolffe as Org Chairman. All four are Admins. They aren't RSI-verified until they run `/verify`. Their Admin powers only work once each one logs in with Discord and Cortana links that login to their record; the bot and website do this from Phase 2 onwards.
-- **Not seeded:** other members, awards, Discord role IDs, and a separate Salvage division (the owner decided Salvage is part of Industry). Each seeded item does store its live Discord role *name*, so Phase 2's `/setup roles` can find the matching role IDs.
-- **Promotions up to Prefect by division leaders** (the owner's answer, now in the spec) arrive with Phase 2's `/promote`. Until then, only Admins can change ranks.
-- **A few extra columns** not listed in the spec were added because later phases need them:
-  - `discord_role_name` and `rank_role_prefix`, for matching Discord roles
+- **Prefect is treated as Member level** (not Officer) for ops permissions. The spec says "to confirm".
+- **Admin = anyone with a current `org`-scope appointment.** To make someone an Admin, add that appointment. To remove them, set its end date.
+- **Promotions are judged by the member's home initiative and division.** An Auxiliary Division Director can't promote someone whose home is in another initiative, because the rank belongs to the home initiative.
+- **Demotions are Admin-only**, and **nobody can change their own rank**, Admins included.
+- **Director roles:** the bot manages one "Division Director" role for the Director rank. The live "Sub Division Director" and "EOS Initiative Sub-Director" roles are still handed out by hand.
+- **Awards are not synced** to Discord yet; the owner deferred awards.
+- **Existing members aren't imported yet.** Cortana only manages roles for people it knows about: the seeded leaders, and anyone who enlists. Everyone else's roles are left completely alone. Importing the current ~185 members is a separate step to plan before going live. Until then, a leader's hand-given division roles will show up as mismatches once roles are linked.
+- **Tables added beyond the spec's fifteen:** `org_settings` (RSI tag and HDI role), `promotion_requests` (proposals waiting for an Admin) and `verification_codes` (one-time `/verify` codes).
+- **Extra columns** added for the bot and later phases:
+  - `discord_role_name`, `rank_role_prefix` and `discord_role_name_pattern`, for matching Discord roles
   - `slug` and `sort_order`
-  - `unit_id` on assignments, so `/assign` can place someone in a squadron
+  - `unit_id` on assignments
   - `kind` on units
-  - `is_public` on operations, for "opted in per op"
+  - `is_public` on operations
+  - `interested_initiative_id` on members
+  - `leader_can_approve` on ranks
   - `actor_role` on the audit log
 - **The audit log column is `table_name`**, not `table`, because `table` is a reserved word in SQL.

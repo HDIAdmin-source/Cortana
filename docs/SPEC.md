@@ -47,6 +47,8 @@ The owner has decided three things. The current Discord structure post (Structur
 | Chairs (leaders) | Hary: Chair of Helios (Discord 358101352938995715). Chance: Chair of Eos (Discord 143127736414633984). Tusk: Chair of Selene (Discord 242246773555462145). Seeded with Chair rank, their home initiative and a Chair appointment. Hall and the fleet leads are not confirmed and are not seeded |
 | Org Chairman | Wolffe (Discord 201532643483975681). Admin through an org-wide "Org Chairman" appointment. Has no rank and no home initiative: the one exception to "every member has exactly one home initiative" |
 | Admins at launch | Wolffe, Chance, Hary and Tusk. The three Chairs are Admins through an org-wide "=The High Table=" appointment |
+| Accepting applicants | A leader accepts a verified applicant with `/assign` (Chair in their initiative, Division Director in their division, or an Admin). That makes them active at the lowest rank (Hoplite). Passing `/verify` alone doesn't |
+| HDI role | Cortana manages the "HDI" Discord role: every active member has it, and it's removed when they become inactive or depart |
 | RSI org | Public org page: robertsspaceindustries.com/en/orgs/OLDHUNTERS (org name Hyperion Defense Industries; the OLDHUNTERS tag is an old name RSI won't let us change). The member list is public (213 members on 11 Nov 2026). Members who hide their org membership on RSI won't appear, so admins need a manual verify option |
 
 ## Org model Cortana will store
@@ -142,6 +144,8 @@ Fifteen tables cover version 1. Every change to rank, appointment, membership or
 | `audit_log` | Every sensitive change | actor_id, action, table, row_id, before, after, at |
 
 Fleet numbers on the website come from `member_ships` and are labelled "member-reported", because RSI hangars are private and cannot be verified.
+
+**Added in Phase 2 (12 November 2026).** Three supporting tables: `org_settings` (RSI org tag and the active-member Discord role), `promotion_requests` (promotions a Director or Chair proposed, waiting for an Admin) and `verification_codes` (one-time `/verify` codes). The bot connects with the service-role key, so it changes data only through `bot_*` database functions. These apply the permission rules to whoever ran the command and record them in `audit_log`.
 
 ## Identity, verification and permissions
 
@@ -299,6 +303,8 @@ The domain switch happens between Phase 4 and Phase 5.
 - ~~Are the recorded leaders current and safe to seed?~~ Answered: Hary, Chance and Tusk as Chairs; others not confirmed
 - ~~Is HDI's RSI org page member list public?~~ Answered: yes. Still open: does HDI add people there only after a trial period? (Phase 2)
 - Who may demote a member, and to which ranks? (Admin-only until decided)
+- How and when to import the current ~185 Discord members into Cortana before the bot goes live (before going live)
+- Should "Sub Division Director" and "EOS Initiative Sub-Director" become Cortana-managed roles? (Phase 2 follow-up)
 - ~~Discord user IDs for Hary, Chance and Tusk~~ Supplied 11 Nov 2026 and seeded, with Wolffe as Org Chairman
 - Where should merch live after Squarespace? (Phase 4)
 - Approved logo files, colour values and fonts for the website theme. (Phase 4)

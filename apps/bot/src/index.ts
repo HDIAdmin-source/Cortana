@@ -1,42 +1,85 @@
-import { Client, Events, GatewayIntentBits } from "discord.js";
-import { createClient } from "@supabase/supabase-js";
-import type { Initiative } from "@cortana/shared";
+import { Client, Events, GatewayIntentBits, MessageFlags, type Interaction } from "discord.js";
+import { commandsByName } from "./commands";
+import type { Ctx } from "./context";
+import { createDb, UserFacingError } from "./db";
+import { loadEnv } from "./env";
+import { createLookups } from "./lookups";
+import { onMemberUpdate } from "./sync/mismatch";
 
 /**
- * Phase 1: the bot only logs in and confirms it can reach the database.
- * Slash commands (/enlist, /verify, /promote...) arrive in Phase 2.
+ * The Cortana Discord bot (docs/SPEC.md, "Discord bot, version 1").
+ * Cortana is the source of truth; Discord roles mirror it, never the other way round.
  */
+const env = loadEnv();
+const db = createDb(env.supabaseUrl, env.serviceRoleKey);
 
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    console.error(`Missing ${name}. Copy apps/bot/.env.example to apps/bot/.env and fill it in (see the README).`);
-    process.exit(1);
-  }
-  return value;
-}
-
-const token = requireEnv("DISCORD_TOKEN");
-const supabase = createClient(requireEnv("SUPABASE_URL"), requireEnv("SUPABASE_SERVICE_ROLE_KEY"), {
-  auth: { persistSession: false },
+const client = new Client({
+  // GuildMembers is a "privileged intent": switch on "Server Members Intent" in the
+  // Discord Developer Portal (Bot page), or login fails. It's needed to notice roles
+  // handed out by hand.
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
 });
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const ctx: Ctx = { client, db, env, lookups: createLookups(db) };
 
 client.once(Events.ClientReady, async (ready) => {
   console.log(`Cortana bot logged in as ${ready.user.tag}`);
-
-  const { data, error } = await supabase
-    .from("initiatives")
-    .select("name")
-    .order("sort_order")
-    .returns<Pick<Initiative, "name">[]>();
-
-  if (error) {
-    console.error("Could not reach the Cortana database:", error.message);
-  } else {
-    console.log(`Database OK. Initiatives: ${data.map((i) => i.name).join(", ")}`);
+  try {
+    const org = await ctx.lookups.get();
+    console.log(`Database OK. Initiatives: ${org.initiatives.map((i) => i.name).join(", ")}`);
+  } catch (err) {
+    console.error("Could not reach the Cortana database:", err);
+  }
+  if (!ready.guilds.cache.has(env.guildId)) {
+    console.warn(`The bot isn't in the server ${env.guildId} (DISCORD_GUILD_ID). Invite it first; see the README.`);
   }
 });
 
-await client.login(token);
+async function reply(interaction: Interaction, content: string) {
+  if (!interaction.isRepliable()) return;
+  if (interaction.deferred || interaction.replied) {
+    await interaction.editReply({ content, embeds: [] }).catch(() => undefined);
+  } else {
+    await interaction.reply({ content, flags: MessageFlags.Ephemeral }).catch(() => undefined);
+  }
+}
+
+client.on(Events.InteractionCreate, async (interaction) => {
+  // Only work in the configured server (the test server until the owner approves going live).
+  if (interaction.guildId !== env.guildId) {
+    if (interaction.isRepliable()) await reply(interaction, "Cortana only works in the HDI server.");
+    return;
+  }
+
+  if (interaction.isAutocomplete()) {
+    const command = commandsByName.get(interaction.commandName);
+    try {
+      await command?.autocomplete?.(ctx, interaction);
+    } catch (err) {
+      console.error(`Autocomplete for /${interaction.commandName} failed:`, err);
+      await interaction.respond([]).catch(() => undefined);
+    }
+    return;
+  }
+
+  if (!interaction.isChatInputCommand()) return;
+  const command = commandsByName.get(interaction.commandName);
+  if (!command) return;
+
+  try {
+    await command.execute(ctx, interaction);
+  } catch (err) {
+    if (err instanceof UserFacingError) {
+      await reply(interaction, err.message);
+    } else {
+      console.error(`/${interaction.commandName} failed:`, err);
+      await reply(interaction, "Something went wrong on my side, and an admin can see the details in the bot's logs. Nothing was changed unless I said so.");
+    }
+  }
+});
+
+client.on(Events.GuildMemberUpdate, (before, after) => {
+  onMemberUpdate(ctx, before, after).catch((err) => console.error("Role mismatch check failed:", err));
+});
+
+await client.login(env.token);
