@@ -11,17 +11,30 @@
 -- ---------------------------------------------------------------------------
 -- Rank ladder, lowest to highest
 -- ---------------------------------------------------------------------------
-insert into public.ranks (name, tier, sort_order, description) values
-  ('Hoplite',    'member',   1, 'Entry stage; onboarding and proving reliability'),
-  ('Operator',   'member',   2, 'Qualified participating member'),
-  ('Specialist', 'member',   3, 'Deeper competence in a defined field'),
+-- leader_can_approve: owner decision 11 Nov 2026, division leaders approve promotions up to Prefect.
+-- discord_role_name_pattern: how the live Discord role is named per home initiative
+--   ({prefix} = H-/E-/S-, {rank} = rank name, {initiative} = initiative name).
+insert into public.ranks (name, tier, sort_order, leader_can_approve, discord_role_name_pattern, description) values
+  ('Hoplite',    'member',   1, true,  '{prefix}{rank}',        'Entry stage; onboarding and proving reliability'),
+  ('Operator',   'member',   2, true,  '{prefix}{rank}',        'Qualified participating member'),
+  ('Specialist', 'member',   3, true,  '{prefix}{rank}',        'Deeper competence in a defined field'),
   -- Prefect is Officer "for their own team, to confirm" in the spec; kept at member level until confirmed.
-  ('Prefect',    'member',   4, 'Small-team supervision and standards'),
-  ('Praetor',    'officer',  5, 'Senior member with broader leadership duties'),
-  ('Centurion',  'officer',  6, 'Most senior non-director rank'),
-  ('Director',   'director', 7, 'Held by members appointed to run a division (Sub-Division Director, Division Director, or an initiative Sub-Director)'),
-  ('Chair',      'chair',    8, 'Highest rank, one per home initiative (Chair of Helios, Eos, Selene)')
+  ('Prefect',    'member',   4, true,  '{prefix}{rank}',        'Small-team supervision and standards'),
+  ('Praetor',    'officer',  5, false, '{prefix}{rank}',        'Senior member with broader leadership duties'),
+  ('Centurion',  'officer',  6, false, '{prefix}{rank}',        'Most senior non-director rank'),
+  -- Live server: one "Division Director" role. (Sub Division Director and EOS Initiative
+  -- Sub-Director are left to be handed out by hand for now.)
+  ('Director',   'director', 7, false, 'Division Director',     'Held by members appointed to run a division (Sub-Division Director, Division Director, or an initiative Sub-Director)'),
+  ('Chair',      'chair',    8, false, 'Chair of {initiative}', 'Highest rank, one per home initiative (Chair of Helios, Eos, Selene)')
 on conflict (name) do nothing;
+
+-- ---------------------------------------------------------------------------
+-- Organisation settings: RSI org tag for /verify, and the active-member Discord role
+-- (owner decisions 11 Nov 2026: the org page is OLDHUNTERS; active members get "HDI").
+-- ---------------------------------------------------------------------------
+insert into public.org_settings (id, rsi_org_sid, member_role_name)
+values (true, 'OLDHUNTERS', 'HDI')
+on conflict (id) do nothing;
 
 -- ---------------------------------------------------------------------------
 -- Initiatives (Greek mottos exactly as written in the spec)
