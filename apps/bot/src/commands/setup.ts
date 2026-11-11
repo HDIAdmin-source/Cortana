@@ -23,6 +23,23 @@ function roleWarnings(role: Role): string[] {
   return w;
 }
 
+/** Join lines into one Discord message (2000 characters max), ending with "…and N more" if needed. */
+export function fitMessage(lines: string[], limit = 2000): string {
+  const out: string[] = [];
+  let length = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    const more = `…and ${lines.length - i} more.`;
+    if (length + line.length + 1 + more.length > limit) {
+      out.push(more);
+      break;
+    }
+    out.push(line);
+    length += line.length + 1;
+  }
+  return out.join("\n");
+}
+
 const encode = (t: RoleTarget) => `${t.kind}|${t.id ?? ""}|${t.slug ?? ""}`;
 function decode(value: string): Omit<RoleLink, "role_id"> {
   const [kind, id, slug] = value.split("|");
@@ -33,7 +50,14 @@ export const setup: Command = {
   data: new SlashCommandBuilder()
     .setName("setup")
     .setDescription("Admins: connect Cortana to this server's roles")
-    .addSubcommand((s) => s.setName("roles").setDescription("Match Cortana's ranks, initiatives, divisions and units to roles by name"))
+    .addSubcommand((s) =>
+      s
+        .setName("roles")
+        .setDescription("Match Cortana's ranks, initiatives, divisions and units to roles by name")
+        .addBooleanOption((o) =>
+          o.setName("create_missing").setDescription("Also create any role that doesn't exist yet, with no permissions (handy for a test server)"),
+        ),
+    )
     .addSubcommand((s) =>
       s
         .setName("link")
@@ -71,16 +95,34 @@ export const setup: Command = {
         byName.set(key, [...(byName.get(key) ?? []), role]);
       }
 
+      const createMissing = interaction.options.getBoolean("create_missing") ?? false;
       const links: RoleLink[] = [];
       const unmatched: string[] = [];
+      const created: string[] = [];
       const warnings = new Set<string>();
       let alreadyLinked = 0;
 
       for (const t of targets) {
         if (!t.expected_name) continue; // no Discord role for this entry (e.g. Auxiliary)
-        const found = byName.get(t.expected_name.trim().toLowerCase()) ?? [];
+        const key = t.expected_name.trim().toLowerCase();
+        let found = byName.get(key) ?? [];
+
+        // Create it if asked, once per name (e.g. one "Division Director" for all three initiatives).
+        // New roles get NO permissions, so the bot can never hand out anything dangerous.
+        if (found.length === 0 && createMissing) {
+          const role = await guild.roles.create({
+            name: t.expected_name.trim(),
+            permissions: [],
+            mentionable: false,
+            reason: `Cortana /setup roles by ${interaction.user.tag}`,
+          });
+          byName.set(key, [role]);
+          created.push(role.name);
+          found = [role];
+        }
+
         if (found.length !== 1) {
-          unmatched.push(`• ${t.label}: expected a role named "${t.expected_name}"${found.length > 1 ? " (several roles have that name)" : ""}`);
+          unmatched.push(`• ${t.label}: "${t.expected_name}"${found.length > 1 ? " (several roles have that name)" : ""}`);
           continue;
         }
         const role = found[0]!;
@@ -92,14 +134,18 @@ export const setup: Command = {
       const saved = links.length ? await rpc<number>(ctx.db, "bot_set_role_ids", { p_actor_discord: interaction.user.id, p_links: links }) : 0;
       ctx.lookups.invalidate();
 
-      const lines = [
+      const parts = [
         `Linked **${saved}** role(s); **${alreadyLinked}** were already linked.`,
-        unmatched.length
-          ? `\n**Couldn't match ${unmatched.length}.** Rename the Discord role to match, or link it by hand with \`/setup link\`:\n${unmatched.join("\n")}`
-          : "Everything matched. ✅",
-        warnings.size ? `\n**Please fix:**\n${[...warnings].join("\n")}` : "",
+        created.length ? `Created **${created.length}** new role(s) with no permissions: ${created.join(", ")}.` : "",
+        warnings.size ? `**Please fix:**\n${[...warnings].join("\n")}` : "",
       ];
-      await interaction.editReply(lines.filter(Boolean).join("\n").slice(0, 2000));
+      if (unmatched.length) {
+        const intro = `**Couldn't match ${unmatched.length}.** Rename the Discord role to match, link it with \`/setup link\`, or run \`/setup roles create_missing:True\` to create them:`;
+        parts.push(intro, ...unmatched);
+      } else {
+        parts.push("Everything matched. ✅");
+      }
+      await interaction.editReply(fitMessage(parts.filter(Boolean)));
       return;
     }
 
