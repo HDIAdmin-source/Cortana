@@ -104,4 +104,23 @@ client.on(Events.GuildMemberUpdate, (before, after) => {
   onMemberUpdate(ctx, before, after).catch((err) => console.error("Role mismatch check failed:", err));
 });
 
-await client.login(env.token);
+try {
+  await client.login(env.token);
+} catch (err) {
+  const message = (err as Error).message ?? String(err);
+  if (/disallowed intents/i.test(message)) {
+    console.error(
+      "\nDiscord refused to connect: \"Server Members Intent\" is switched off.\n" +
+        "Fix: Discord Developer Portal > your application > Bot > Privileged Gateway Intents >\n" +
+        "turn on SERVER MEMBERS INTENT > Save Changes. Then start the bot again.\n",
+    );
+  } else if (/invalid token|TokenInvalid/i.test(message)) {
+    console.error(
+      "\nDiscord says the bot token is wrong.\n" +
+        "Fix: Developer Portal > Bot > Reset Token, paste the new token into DISCORD_TOKEN in apps/bot/.env, start again.\n",
+    );
+  } else {
+    console.error("Couldn't log in to Discord:", err);
+  }
+  process.exit(1);
+}
